@@ -6,6 +6,7 @@ app = Flask(__name__)
 
 GROUPME_BOT_ID = os.getenv("GROUPME_BOT_ID")
 HF_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
+HF_MODEL_URL = "https://api-inference.huggingface.co/mistralai/Mistral-7B-Instruct-v0.1"
 
 @app.route('/')
 def home():
@@ -35,7 +36,7 @@ def webhook():
 
     try:
         response = requests.post(
-            "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1",
+            HF_MODEL_URL,
             headers={"Authorization": f"Bearer {HF_API_KEY}"},
             json={"inputs": prompt}
         )
@@ -43,11 +44,14 @@ def webhook():
         print("Status code:", response.status_code)
         print("Raw text:", response.text)
 
+        response.raise_for_status()  # Raises exception for HTTP errors
+
         result = response.json()
         generated = result[0]["generated_text"]
         reply_text = generated.split("GreggBot:")[-1].strip()
         final_reply = f"*Beep Boop* {reply_text} *Beep Boop*"
 
+        # Send reply to GroupMe
         requests.post(
             "https://api.groupme.com/v3/bots/post",
             json={"bot_id": GROUPME_BOT_ID, "text": final_reply}
@@ -57,3 +61,6 @@ def webhook():
         print("Error with Hugging Face:", e)
 
     return '', 200
+
+if __name__ == "__main__":
+    app.run(debug=True, port=int(os.environ.get("PORT", 10000)))
