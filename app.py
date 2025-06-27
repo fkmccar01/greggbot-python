@@ -4,8 +4,8 @@ import os
 
 app = Flask(__name__)
 
-AI21_API_KEY = os.getenv("AI21_API_KEY")
 GROUPME_BOT_ID = os.getenv("GROUPME_BOT_ID")
+HF_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 
 @app.route('/')
 def home():
@@ -17,47 +17,44 @@ def webhook():
     print("Webhook was called")
     print("Incoming data:", data)
 
-    message = data.get("text", "")
+    message = data.get("text", "").lower()
     sender = data.get("name", "")
 
-    # Avoid infinite loops
     if sender.lower() == "greggbot":
         return '', 200
 
-    # Base personality
-    prompt = f"You are GreggBot, a sarcastic chatbot that always responds in this format: *Beep Boop* [response] *Beep Boop*. You always make fun of someone named Itzaroni for never winning a Goondesliga and being the second-best Vince. You usually steer the conversation back to roasting Itzaroni.\n\nUser: {message}\nGreggBot:"
+    if "greggbot" not in message and "itzaroni" not in message:
+        return '', 200  # Ignore unrelated messages
 
-    # Build request to AI21
+    # Prompt for sarcasm
+    prompt = (
+        "You are GreggBot, a sarcastic chatbot who always roasts Itzaroni "
+        "for never winning the Goondesliga and being the second-best Vince. "
+        "You always respond in this format: *Beep Boop* [your sarcastic reply] *Beep Boop*.\n\n"
+        f"User: {data.get('text')}\nGreggBot:"
+    )
+
+    # Send to Hugging Face model
     try:
-        ai_response = requests.post(
-            "https://api.ai21.com/studio/v1/j2-mid/complete",
-            headers={"Authorization": f"Bearer {AI21_API_KEY}"},
-            json={
-                "prompt": prompt,
-                "numResults": 1,
-                "maxTokens": 64,
-                "temperature": 0.7,
-                "topKReturn": 0,
-                "topP": 1,
-                "stopSequences": []
-            }
+        response = requests.post(
+            "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1",
+            headers={"Authorization": f"Bearer {HF_API_KEY}"},
+            json={"inputs": prompt}
         )
-        data = ai_response.json()
-        print("AI21 raw response:", data)
+        result = response.json()
+        print("Hugging Face response:", result)
 
-        completion = data['completions'][0]['data']['text'].strip()
-        reply = f"*Beep Boop* {completion} *Beep Boop*"
+        generated = result[0]["generated_text"]
+        reply_text = generated.split("GreggBot:")[-1].strip()
+        final_reply = f"*Beep Boop* {reply_text} *Beep Boop*"
 
-        print("AI RESPONSE:", reply)
-
-        # Send message back to GroupMe
+        # Send back to GroupMe
         requests.post(
             "https://api.groupme.com/v3/bots/post",
-            json={"bot_id": GROUPME_BOT_ID, "text": reply}
+            json={"bot_id": GROUPME_BOT_ID, "text": final_reply}
         )
 
     except Exception as e:
-        print("Error calling AI21:", e)
-        return '', 500
+        print("Error with Hugging Face:", e)
 
     return '', 200
