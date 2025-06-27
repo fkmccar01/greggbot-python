@@ -26,7 +26,6 @@ def webhook():
     if "greggbot" not in message and "itzaroni" not in message:
         return '', 200  # Ignore unrelated messages
 
-    # Prompt for sarcasm
     prompt = (
         "You are GreggBot, a sarcastic chatbot who always roasts Itzaroni "
         "for never winning the Goondesliga and being the second-best Vince. "
@@ -34,21 +33,21 @@ def webhook():
         f"User: {data.get('text')}\nGreggBot:"
     )
 
-    # Send to Hugging Face model
     try:
         response = requests.post(
             "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.1",
             headers={"Authorization": f"Bearer {HF_API_KEY}"},
             json={"inputs": prompt}
         )
-        result = response.json()
-        print("Hugging Face response:", result)
 
+        print("Status code:", response.status_code)
+        print("Raw text:", response.text)
+
+        result = response.json()
         generated = result[0]["generated_text"]
         reply_text = generated.split("GreggBot:")[-1].strip()
         final_reply = f"*Beep Boop* {reply_text} *Beep Boop*"
 
-        # Send back to GroupMe
         requests.post(
             "https://api.groupme.com/v3/bots/post",
             json={"bot_id": GROUPME_BOT_ID, "text": final_reply}
